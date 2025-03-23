@@ -1,0 +1,164 @@
+---
+title: "Probleme "
+author: "1"
+date: "2024-12-06"
+output:
+  word_document: default
+  html_document: default
+---
+##Probleme 1: Étude de la diversité florale à Bornéo
+## I) Chargement et premier nettoyage des données
+
+```{r}
+dat = read.table("trees.txt",sep=",", header=TRUE,stringsAsFactors = FALSE,)
+```
+
+## Question 2: nombre d'individus et de variable du jeu de données
+
+```{r}
+dim(dat)
+
+```
+
+## Il y'a 2 variables et 47813 individus 
+
+###Pour avoir le  nombre de modalités des variables nous avons fait ça:
+
+```{r}
+nombre_modalites_1= length(unique(dat$Espèce))
+nombre_modalites_2=length(unique(dat$Terrain))
+print(paste("Modalité de la variable Terrain :", nombre_modalites_2))
+print(paste("Modalité de la variable Espece :", nombre_modalites_1))
+print(unique(dat$Terrain))
+```
+###Question 3: table de contingence
+
+```{r}
+tab =table(dat$Terrain, dat$Espèce)
+dim(tab)
+```
+###Question 4:  nombre d’observations d’arbres pour chaque terrain
+```{r}
+observations_par_terrain=rowSums(tab)
+head(observations_par_terrain)
+```
+###question 5:
+```{r}
+tab=tab[observations_par_terrain >= 10, ]
+dim(tab)
+```
+###Question 6: Histogramme (comparaison avec la figure a faire)
+```{r}
+hist(observations_par_terrain, 
+     breaks = 13, 
+     main = "Histogramme du nombre d'observations d'arbres", 
+     xlab = "Nombre d'observations d'arbres", 
+     ylab = "Fréquence", 
+     col = "blue", 
+     border = "black",
+     las = 1,
+     xlim=c(200,800))
+```
+### II) Deuxième nettoyage des données
+
+##question 1:Observations d’arbres qui n’ont pas été identifiés
+```{r}
+tab = tab[, colnames(tab) != " "]
+dim(tab)
+```
+###Question 2:  observations d’arbres qui ont été mal identifiés.
+```{r}
+library(stringr)
+tab = tab[, str_detect(colnames(tab), "\\?", negate = TRUE)]
+dim(tab)
+```
+###Question 3: Matrice vide M avec 105 lignes et 10 colonnes
+```{r}
+M = matrix(NA, nrow = 105, ncol = 10)
+```
+
+###Question 4:  Liste des 10 espèces d’arbres les plus abondantes dans le  terrain A1
+```{r}
+especes_A1 = sort(tab["A1", ], decreasing = TRUE)
+head(especes_A1)
+M[1, ] = names(especes_A1)[1:10]
+```
+### Question 5: 10 espèces d’arbres les plus abondantes dans le i-ème terrain
+```{r}
+for (i in 1:105) {
+  terrain = rownames(tab)[i]
+  especes_terrain = sort(tab[terrain, ], decreasing = TRUE)
+  M[i, ] = names(especes_terrain)[1:10]
+}
+print( M[i, ])
+```
+###Question 6:  Le nom des 4 espèces qui apparaissent le plus souvent 
+```{r}
+Especes_10= as.vector(M)
+c = sort(table(Especes_10), decreasing = TRUE)
+result <- paste(names(c), c, sep = ": ")
+print(result[1:4])
+```
+######Non il ya une legere difference
+
+
+###Question 7: Espèce "allantospermum  borneense" 
+```{r}
+terrains_allantospermum = which(apply(M, 1, function(x) "allantospermum borneense" %in% x))
+noms_terrains = rownames(tab)[terrains_allantospermum]
+print(noms_terrains)
+```
+###### Oui  le résultat obtenu correspond au résultat donné dans la table n°2 de l’article
+
+
+### III) Clustering hiérarchique des données
+
+###Question 1:  dissimilarité de Bray-Curtis entre les deux premières lignes du tableau tab.
+```{r}
+x=tab[1, ]
+y=tab[2, ]
+a=sum(pmin(x, y))
+b=sum(x + y)
+Bray_curtis=1 - 2 * (a/b)
+print(Bray_curtis)
+```
+
+###Question 2: matrice  D des dissimilarités de Bray-Curtis entre les 105 terrains
+
+```{r}
+if (!requireNamespace("ecodist", quietly = TRUE)) {
+  install.packages("ecodist")
+}
+library(ecodist)
+
+D = bcdist(tab)
+print( D[1])
+
+```
+###  la dissimilarité de Bray-Curtis entre les deux premières lignes du tableau tab correspond bien à D[1]
+
+
+###Question 3: Effectuer le clustering hiérarchique sur les 105 terrains avec cette dissimilarité entre les classes et la dissimilarité de Bray-Curtis entre les terrains. Stocker le résultat dans une variable res.
+
+##Les auteurs ont utilisés la dissimilarité moyenne entre les classes
+```{r}
+res=hclust(as.dist(D), method = "average")
+```
+
+###Question 4: dendrogramme
+```{r,fig.width=20,fig.height=30,fig.align="center"}
+plot(as.dendrogram(res), horiz = TRUE, main = "Dendrogramme horizontal",ylim=c(0,length(labels(as.dendrogram(res)))),cex.main=2,cex.lab=1.5)
+```
+
+
+###Question 5:
+#La classe {H1,H2,H3,H4,H5,H6,H7,H8,H9} a été fusionnée avec la classe {H10,H11,H12,H13,H14,H15} et la dissimilarité entre ces 2 classes est de : 0,72
+#Sur la figure 6 de l'article on a bien une fusion entre ces 2 classes et leur dissimilarité est approximativement  la meme que ce qu'on a trouvé.
+
+
+##Question 6:
+
+#La classe {M1,M2,M3,M4,M5} a été fusionnée avec la classe {K2,K3,K4,L1,L3,L4,L5,L6} et la dissimilarité entre ces 2 classes est de 0,75.
+#Sur la figure 6 de l'article on a bien une fusion entre ces 2 classes et leur dissimilarité est approximativement  la meme que ce qu'on a trouvé.
+#La classe {K1} a été fusionnée avec la classe {L2} et la dissimilarité entre ces 2 classes est de 0,77.
+#Sur la figure 6 de l'article, cette fois il y'a une difference entre les resultats,les auteurs ont fusionné la classe {K1} avec la classe {N1,N2,N3,N4,N5} avec une dissimilarité approximative de 0,78.

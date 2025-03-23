@@ -1,0 +1,371 @@
+---
+title: "problem "
+author: "2"
+date: "2024-12-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+`
+
+```{r}
+Medecin_liberaux<- read.table("Medecin_liberaux_2023.txt",header = TRUE,sep = ",",dec = ".", stringsAsFactors = FALSE,encoding = "UTF-8") 
+```
+
+#### 2- Nombre de professions, régions et départements distincts
+
+Utilisez les fonctions unique() et length() pour identifier les catégories distinctes
+
+```{r}
+nb_professions <- length(unique(Medecin_liberaux$profession_sante))
+nb_regions <- length(unique(Medecin_liberaux$libelle_region))
+nb_departements <- length(unique(Medecin_liberaux$libelle_departement))
+
+cat(nb_professions,nb_regions,nb_departements)
+```
+
+### 3- Extraction des données des pédiatres en Nouvelle-Aquitaine
+
+Filtrez les données pour la région Nouvelle-Aquitaine et calculez le total.
+
+```{r}
+pediatres_NA <- Medecin_liberaux[Medecin_liberaux$profession_sante == "Pédiatres" & 
+                                  Medecin_liberaux$libelle_region == "Nouvelle-Aquitaine", ]
+total_pediatres_NA <- sum(pediatres_NA$effectif)
+cat(total_pediatres_NA)
+
+```
+
+### 4- Créer une matrice vide pour les professions et les régions
+
+Initialisez une matrice avec les dimensions appropriées.
+
+
+
+```{r}
+regions <- unique(Medecin_liberaux$libelle_region)
+professions <- unique(Medecin_liberaux$profession_sante)
+M <- matrix(0, nrow = length(regions), ncol = length(professions))
+rownames(M) <- regions
+colnames(M) <- professions
+
+```
+
+#### 5- Compléter la matrice
+
+Remplissez la matrice avec les données.
+
+
+```{r}
+for (region in regions) {
+    for (profession in professions) {
+        M[region, profession] <- sum(Medecin_liberaux$effectif[Medecin_liberaux$libelle_region == region & 
+                                                               Medecin_liberaux$profession_sante == profession])
+    }
+}
+
+
+
+```
+
+
+```{r}
+M["Nouvelle-Aquitaine", "Pédiatres"]
+```
+
+###6- Charger les données du fichier Pop_Reg_2023.txt contenant la population de chaque région de France au 1er janvier 2023
+
+```{r}
+Pop_Reg <- read.table("Pop_Reg_2023.txt", header = FALSE, sep = ";", stringsAsFactors = FALSE)
+#Renommez les colonnes de Pop_Reg
+colnames(Pop_Reg) <- c("region", "population")
+head(Pop_Reg)
+```
+
+###7 Modifier la matrice M de sorte qu’elle contienne le nombre de médecins par 10.000 habitants de chaque profession et chaque région. Vérifier que la commande
+
+```{r}
+
+missing_regions <- setdiff(regions, Pop_Reg$region)
+if (length(missing_regions) > 0) {
+    stop(paste("Les régions suivantes sont manquantes dans Pop_Reg :", paste(missing_regions, collapse = ", ")))
+}
+
+for (region in regions) {
+    population <- Pop_Reg$population[Pop_Reg$region == region]
+    M[region, ] <- (M[region, ] / population) * 10000
+}
+
+```
+
+```{r}
+cat(population)
+```
+
+```{r}
+# Population de la Nouvelle-Aquitaine
+population_NA <- Pop_Reg$population[Pop_Reg$region == "Nouvelle-Aquitaine"]
+
+# Résultat attendu
+Résultat_attendu <- (total_pediatres_NA / population_NA) * 10000
+
+```
+
+```{r}
+Résultat_obtenu <- M["Nouvelle-Aquitaine", "Pédiatres"]
+```
+
+```{r}
+if (isTRUE(all.equal(Résultat_attendu, Résultat_obtenu))) {
+    print("La vérification est correcte : les valeurs correspondent.")
+}
+
+```
+
+# II) Visualisation et partitionnement des données
+
+## 1- Transformation et centrage
+
+```{r}
+M_scaled <- as.data.frame(scale(M))
+```
+
+### 2-Matrice de covariance et visualisation
+
+
+```{r}
+
+library(corrplot)
+
+cov_matrix <- cov(M_scaled, use = "pairwise.complete.obs")
+abbreviation_table <- data.frame(
+  "Nom complet" = rownames(cov_matrix),
+  "Abréviation" = abbreviate(rownames(cov_matrix), minlength = 10)
+)
+
+print(abbreviation_table)
+
+rownames(cov_matrix) <- abbreviate(rownames(cov_matrix), minlength = 10)
+colnames(cov_matrix) <- abbreviate(colnames(cov_matrix), minlength = 10)
+
+```
+
+```{r}
+corrplot(cov_matrix, method = "circle")
+
+```
+
+
+
+```{r}
+# Visualiser la matrice de corrélation avec des ajustements
+corrplot(
+  cov_matrix,
+  method = "circle",                              # Représentation en cercles
+  type = "upper",                                 # Afficher uniquement la moitié supérieure
+  tl.cex = 0.7,                                   # Taille réduite des étiquettes
+  tl.col = "black",                               # Couleur des étiquettes en noir
+  col = colorRampPalette(c("blue", "white", "red"))(200), # Palette de couleurs
+  cl.cex = 0.8                                    # Taille de la légende ajustée
+)
+```
+`
+
+### 3 Partitionnement en k-means
+```{r}
+library("factoextra")
+library(cluster)
+```
+
+```{r}
+fviz_nbclust(M_scaled , kmeans , method ='silhouette', nstart =10)
+```
+### 4 Effectuer la classification en k-means avec K classes et donner le nom des régions appartenant à chaque classe
+
+
+```{r}
+D = dist(M_scaled)
+res = kmeans(M_scaled, 2, nstart=10)
+res$cluster
+```
+
+
+
+###5 Afficher le diagramme en barre des silhouettes de cette classification ainsi que la silhouette moyenne. Commenter sur la qualité de cette classification
+```{r}
+sil = silhouette(res$cluster, D)
+fviz_silhouette(sil)
+```
+
+
+### 6 Clustering hierarchique
+
+```{r}
+res_H = hclust(D, method="ward.D2")
+```
+
+```{r}
+fviz_nbclust(M_scaled, hcut, method='silhouette', hc_method="ward.D2", hc_metric = "euclidean")
+
+```
+
+```{r}
+plot(res_H, labels = rownames(M_scaled), main = "Clustering hiérarchique", xlab = "", sub = "", cex = 0.6)
+rect.hclust(res_H, k = 2, border = "red")
+
+```
+
+###7  Effectuer une ACP à deux dimensions sur les données
+
+
+```{r}
+library(FactoMineR)
+```
+
+```{r}
+res.pca = PCA(M_scaled, graph=FALSE)
+fviz_pca_ind(res.pca, col.ind=as.factor(cutree(res_H, 2)))
+```
+
+
+## amélioration de graph des individus 
+
+```{r}
+fviz_pca_ind(res.pca, 
+             col.ind = as.factor(cutree(res_H, 2)), 
+             palette = c("#2E9FDF", "#E7B800"),    
+             addEllipses = TRUE,                  
+             ellipse.type = "convex",             
+             repel = TRUE,                      
+             pointsize = 4,                       
+             labelsize = 3,                       
+             alpha.ind = 0.9                     
+) +
+theme_minimal() +                                
+ggtitle("Projection des individus selon l'ACP et le clustering") +
+xlab(paste0("Dim 1 (", round(res.pca$eig[1, 2], 1), "%)")) +
+ylab(paste0("Dim 2 (", round(res.pca$eig[2, 2], 1), "%)"))
+
+```
+
+
+
+### III) Étude des professions médicales séparées par département
+
+####1
+
+
+```{r}
+# Charger les données
+# Remplacez 'Medecin_liberaux' par votre DataFrame contenant les données des médecins
+# Assurez-vous qu'il contient les colonnes 'profession_sante', 'libelle_departement', et 'effectif'
+
+# Initialiser la matrice
+departments <- unique(Medecin_liberaux$libelle_departement)
+professions <- unique(Medecin_liberaux$profession_sante)
+M_dept <- matrix(0, nrow = length(departments), ncol = length(professions))
+rownames(M_dept) <- departments
+colnames(M_dept) <- professions
+
+# Remplir la matrice avec les effectifs
+for (department in departments) {
+    for (profession in professions) {
+        M_dept[department, profession] <- sum(Medecin_liberaux$effectif[Medecin_liberaux$libelle_departement == department & 
+                                                                         Medecin_liberaux$profession_sante == profession], na.rm = TRUE)
+    }
+}
+```
+
+```{r}
+Pop_Dep <- read.table("Pop_Dep_2023.txt", header = FALSE, sep = ";", stringsAsFactors = FALSE)
+colnames(Pop_Dep) <- c("department", "population")
+print(Pop_Dep)
+```
+
+```{r}
+
+M_dept <- M_dept[rownames(M_dept) != "Tout département",]
+# Supprimer "Tout département" de la liste des départements
+departments <- departments[departments != "Tout département"]
+
+```
+
+
+```{r}
+# Calculer les effectifs par 10 000 habitants
+for (department in departments) {
+    population <- as.numeric(Pop_Dep$population[Pop_Dep$department == department])
+    M_dept[department, ] <- (M_dept[department, ] / population) * 10000
+}
+
+```
+
+
+
+###2 
+
+```{r}
+M_dep_scaled<-as.data.frame(scale(M_dept))
+```
+
+```{r}
+D2<-dist(M_dep_scaled)
+```
+
+```{r}
+res_H2 = hclust(D2, method="ward.D2")
+```
+
+```{r}
+fviz_nbclust(M_dep_scaled, hcut, method='silhouette', hc_method="ward.D2", hc_metric = "euclidean")
+```
+```{r}
+plot(res_H2, labels = rownames(M_dep_scaled), main = "Cluster Dendrogram", cex = 0.7)
+rect.hclust(res_H2, k = 2, border = c("red", "blue"))
+
+
+
+```
+
+### Select a subset of the data for specific clusters 
+```{r}
+subset <- cutree(res_H2, k = 2) == 1  # Adjust the cluster index as needed
+res_H2_subset <- hclust(dist(M_dep_scaled[subset, ]), method = "ward.D2")
+
+plot(res_H2_subset, labels = rownames(M_dep_scaled)[subset], main = "Subset Cluster Dendrogram", cex = 0.8)
+
+```
+
+
+
+##2  Effectuer une ACP sur ces données
+
+```{r}
+
+res.pca2 = PCA(M_dep_scaled, graph=FALSE)
+fviz_pca_ind(res.pca2, col.ind=as.factor(cutree(res_H2, 2)))
+```
+
+### Améliorer la graphique 
+```{r}
+
+fviz_pca_ind(res.pca2, 
+             col.ind = as.factor(cutree(res_H2, 2)),  
+             palette = c("#0073C2", "#EFC000"),      
+             addEllipses = TRUE,                    
+             ellipse.type = "convex",               
+             repel = TRUE,                          
+             labelsize = 3,                         
+             alpha.ind = 0.9                        
+) +
+theme_minimal() +                                 
+ggtitle("Analyse en composantes principales (ACP) - Clustering") +
+xlab(paste0("Dim 1 (", round(res.pca2$eig[1, 2], 1), "% de variance)")) +
+ylab(paste0("Dim 2 (", round(res.pca2$eig[2, 2], 1), "% de variance)"))
+
+```
+
+
+
